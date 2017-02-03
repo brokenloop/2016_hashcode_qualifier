@@ -52,6 +52,33 @@ for i in range(int(num_orders) * 3):
         order_contents.append(input_data[i + placemarker].split(" "))
 
 
+print(wh_products)
+
+
+class Drone:
+
+    def __init__(self, location, payload):
+        self.location = location
+        self.payload = payload
+        self.inventory = []
+        self.available = True
+
+
+class Warehouse:
+
+    def __init__(self, location, inventory):
+        self.location = location
+        self.inventory = inventory
+
+
+class Map:
+
+    def __init__(self, grid):
+        self.grid = grid
+        self.useful_warehouses = []
+
+
+
 
 
 
