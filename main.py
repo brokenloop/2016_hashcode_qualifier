@@ -23,14 +23,45 @@ class Order:
         self.fulfilled = False
 
 
-class Map: #this stores all of the
+class Map:
 
-    def __init__(self, columns, rows, drones, orders):
-        self.columns = columns
+    def __init__(self, rows, columns, deadline, num_products, product_weights, drones, warehouses, orders):
         self.rows = rows
+        self.columns = columns
+        self.deadline = deadline
+        self.num_products = num_products
+        self.product_weights = product_weights
         self.drones = drones
+        self.warehouses = warehouses
         self.orders = orders
-        
+        self.requested_items = [] #use this to store the items that are being requested. This is used to calculate which warehouses are useful/can fulfil orders
+        self.useful_warehouses = [] #use this to store which warehouses can fulfil orders
+
+
+    def generate_requests(self):
+        """
+        generates the list of requested items
+        """
+        for i in range(int(self.num_products)):
+            self.requested_items.append(0)
+
+        for i in range(len(self.orders)):
+            for j in range(len(self.orders[i].items)):
+                index = int(self.orders[i].items[j])
+                self.requested_items[index] += 1
+
+
+    def find_useful_wh(self):
+        """
+        Finds the warehouses that can fulfil orders. Not complete!! Needs a lot of testing.
+        One Q: What should we do if a wh can fulfil orders? How should we recalculate it when orders are filled?
+        There is a better method than the one I did here.
+        """
+
+        for i in range(len(self.warehouses)):
+            for j in range(len(self.warehouses[i].inventory)):
+                if (int(self.warehouses[i].inventory[j]) > 0) and (self.requested_items[j] > 0):
+                    print("Warehouse is useful")
 
 
 def get_data(file):
@@ -47,7 +78,7 @@ def get_data(file):
 
         rows = parameters[0]
         columns = parameters[1]
-        drone_number = parameters[2]
+        num_drones = parameters[2]
         deadline = parameters[3]
         max_load = parameters[4]
 
@@ -72,7 +103,7 @@ def get_data(file):
 
         num_orders = input_data[placemarker]  # don't even ask...
         delivery_coords = []
-        order_num = []
+        num_contents = []
         order_contents = []
 
         placemarker += 1
@@ -82,35 +113,54 @@ def get_data(file):
                 delivery_coords.append(input_data[i + placemarker].split(" "))
 
             elif i % 3 == 1:
-                order_num.append(input_data[i + placemarker].split(" "))
+                num_contents.append(input_data[i + placemarker].split(" "))
 
             elif i % 3 == 2:
                 order_contents.append(input_data[i + placemarker].split(" "))
 
-    return(rows, columns, drone_number, deadline, max_load, num_products, product_weights, num_warehouses, wh_coords,
-           wh_products, num_orders, delivery_coords, order_num, order_contents)
+
+        #create objects
+
+        drones = []
+        warehouses = []
+        orders = []
+
+        for i in range(int(num_drones)):
+            drones.append(Drone(wh_coords[0], max_load))
+
+        for i in range(int(num_warehouses)):
+            warehouses.append(Warehouse(wh_coords[i], wh_products[i]))
+
+        for i in range(int(num_orders)):
+            orders.append(Order(delivery_coords[i], num_contents, order_contents[i]))
+
+        map = Map(rows, columns, deadline, num_products, product_weights, drones, warehouses, orders)
+
+        return map
+
+    #return(rows, columns, num_drones, deadline, max_load, num_products, product_weights, num_warehouses, wh_coords,
+    #       wh_products, num_orders, delivery_coords, num_contents, order_contents)
 
 
-def initialise(file): #this doesn't work yet, will have to refactor the map class
+
+def main(file):
     """
-    Function to initialise the world. Creates all of the objects using data from get_data.
+    Main method for the program.
     """
 
-    data = get_data(file)
+    map = get_data(file)
 
-    drones = []
-    warehouses = []
-    orders = []
+    map.generate_requests()
+    map.find_useful_wh()
 
-    for i in range(drone_number):
-        drones += Drone(wh_coords[0], max_load)
-
-    return drones, warehouses, orders
+    print(map.orders[0].items)
+    print(map.warehouses[0].inventory)
 
 
-initialise("input.txt")
+main("busy_day.txt")
 
-rows = get_data("input.txt")[0]
 
-print(rows)
+
+
+
 
