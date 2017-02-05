@@ -234,6 +234,7 @@ def main(file):
 
     turn = 0
     while (turn < map.deadline) and (len(map.open_orders) > 0):
+        print("Turn", turn + 1)
         print("Orders left:", len(map.open_orders))
         print()
 
@@ -243,14 +244,14 @@ def main(file):
                 closest_order = map.find_closest(closest_wh, map.open_orders)
                 drone.take_order(closest_order, map)
                 print("Drone", map.drones.index(drone), "delivering items", drone.inventory, "to", drone.current_order.location)
-                print()
                 drone.deliver()
 
         turn += 1
+        print()
 
     print("Finished!")
 
-main("input.txt")
+main("busy_day.txt")
 
 
 
