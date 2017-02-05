@@ -1,3 +1,6 @@
+import math
+
+
 class Drone:
 
     def __init__(self, location, payload):
@@ -16,8 +19,8 @@ class Warehouse:
 
 class Order:
     
-    def __init__(self, delivery_location, num_items, items):
-        self.delivery_location = delivery_location
+    def __init__(self, location, num_items, items):
+        self.location = location
         self.num_items = num_items
         self.items = items
         self.fulfilled = False
@@ -53,20 +56,47 @@ class Map:
 
     def find_useful_wh(self):
         """
-        Finds the warehouses that can fulfil orders. Not complete!! Needs a lot of testing.
-        One Q: What should we do if a wh can fulfil orders? How should we recalculate it when orders are filled?
-        There is a better method than the one I did here.
+        Finds the warehouses that can fulfil orders.
+        One Q: How should we update this list when orders are filled?
         """
 
         for i in range(len(self.warehouses)):
             for j in range(len(self.warehouses[i].inventory)):
                 if (int(self.warehouses[i].inventory[j]) > 0) and (self.requested_items[j] > 0):
-                    print("Warehouse is useful")
+                    self.useful_warehouses.append(self.warehouses[i])
+                    break
 
 
-def get_data(file):
+
+    def find_closest(self, object, candidates):
+        """
+        finds the closest neighbour to "object" from a list of candidate objects (candidates).
+        """
+        x1 = int(object.location[0])
+        y1 = int(object.location[1])
+        x2 = int(candidates[0].location[0])
+        y2 = int(candidates[0].location[1])
+
+        shortest_distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        closest = candidates[0]
+
+        for i in range(1, len(candidates)):
+            x2 = int(candidates[i].location[0])
+            y2 = int(candidates[i].location[1])
+
+            distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+            if distance < shortest_distance:
+                shortest_distance = distance
+                closest = candidates[i]
+
+        return closest
+
+
+
+def initialise(file):
     """
-    Reads data from "file" and returns variables with that data. 
+    Reads data from "file", generates objects based on that data
     """
     with open(file) as file:
         input_data = file.readlines()
@@ -120,7 +150,6 @@ def get_data(file):
 
 
         #create objects
-
         drones = []
         warehouses = []
         orders = []
@@ -148,14 +177,13 @@ def main(file):
     Main method for the program.
     """
 
-    map = get_data(file)
+    map = initialise(file)
 
     map.generate_requests()
     map.find_useful_wh()
 
-    print(map.orders[0].items)
-    print(map.warehouses[0].inventory)
-
+    print(map.find_closest(map.drones[0], map.useful_warehouses))
+    print(len(map.useful_warehouses))
 
 main("busy_day.txt")
 
