@@ -9,14 +9,16 @@ class Drone:
         self.load = 0
         self.inventory = []
         self.current_order = None
+        self.remaining_distance = 0
         self.available = True
 
-    def take_order(self, order, map):
+    def take_order(self, order, distance, map):
         """
         Takes the order that the drone has been given.
         """
 
         self.current_order = order
+        self.remaining_distance = distance
         self.available = False
 
         #calculates which items it can take, adds them to the inventory, then marks them as "in transit"
@@ -141,8 +143,20 @@ class Map:
                 shortest_distance = distance
                 closest = candidates[i]
 
-        return closest
+        return closest, shortest_distance
 
+
+
+    def move_drones(self):
+        """
+        Moves the drones. To be called every turn from the main method.
+        """
+        for drone in self.drones:
+            if not drone.available:
+                if drone.remaining_distance > 0:
+                    drone.remaining_distance -= 1
+                else:
+                    drone.deliver()
 
 
 def initialise(file):
@@ -240,18 +254,22 @@ def main(file):
 
         for drone in map.drones:
             if drone.available and (len(map.open_orders) > 0):
-                closest_wh = map.find_closest(drone, map.useful_warehouses)
-                closest_order = map.find_closest(closest_wh, map.open_orders)
-                drone.take_order(closest_order, map)
+                closest_wh, distance1 = map.find_closest(drone, map.useful_warehouses)
+                closest_order, distance2 = map.find_closest(closest_wh, map.open_orders)
+                tot_distance = int(math.ceil(distance1 + distance2))
+                drone.take_order(closest_order, tot_distance, map)
                 print("Drone", map.drones.index(drone), "delivering items", drone.inventory, "to", drone.current_order.location)
-                drone.deliver()
+                print("Distance to delivery:", drone.remaining_distance)
 
+        map.move_drones()
         turn += 1
         print()
 
     print("Finished!")
 
-main("busy_day.txt")
+
+if __name__=="__main__":
+    main("busy_day.txt")
 
 
 
