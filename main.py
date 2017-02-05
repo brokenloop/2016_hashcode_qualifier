@@ -3,11 +3,59 @@ import math
 
 class Drone:
 
-    def __init__(self, location, payload):
+    def __init__(self, location, max_load):
         self.location = location
-        self.payload = payload
+        self.max_load = int(max_load)
+        self.load = 0
         self.inventory = []
+        self.current_order = None
         self.available = True
+
+    def take_order(self, order, map):
+        """
+        Takes the order that the drone has been given.
+        """
+
+        self.current_order = order
+        self.available = False
+
+        #calculates which items it can take, adds them to the inventory, then marks them as "in transit"
+        for item in self.current_order.items:
+            weight = int(map.product_weights[int(item)])
+            if self.load + weight < self.max_load:
+                self.inventory.append(item)
+                self.load += weight
+
+                self.current_order.items_in_transit.append(item)
+                self.current_order.items.remove(item)
+
+        #removes these items from the "requested_items"
+        for item in self.inventory:
+            map.requested_items[int(item)] -= 1
+
+        #checks whether order has been fulfilled by this drone, removes order from open orders if it has.
+        if self.current_order.items == []:
+            self.current_order.fulfilled = True
+            map.open_orders.remove(self.current_order)
+            map.closed_orders.append(self.current_order)
+
+
+    def deliver(self):
+        """
+        Delivers the order. --Needs testing!! Added before turn counter, so has not been tested.
+        """
+
+        for item in self.inventory:
+            self.current_order.items_delivered.append(item)
+            self.current_order.items_in_transit.remove(item)
+
+        self.location = self.current_order.location
+
+        self.inventory = []
+        self.load = 0
+        self.current_order = None
+        self.available = True
+
 
 
 class Warehouse:
@@ -23,22 +71,25 @@ class Order:
         self.location = location
         self.num_items = num_items
         self.items = items
+        self.items_in_transit = []
+        self.items_delivered = []
         self.fulfilled = False
 
 
 class Map:
 
     def __init__(self, rows, columns, deadline, num_products, product_weights, drones, warehouses, orders):
-        self.rows = rows
-        self.columns = columns
-        self.deadline = deadline
-        self.num_products = num_products
+        self.rows = int(rows)
+        self.columns = int(columns)
+        self.deadline = int(deadline)
+        self.num_products = int(num_products)
         self.product_weights = product_weights
         self.drones = drones
         self.warehouses = warehouses
-        self.orders = orders
-        self.requested_items = [] #use this to store the items that are being requested. This is used to calculate which warehouses are useful/can fulfil orders
-        self.useful_warehouses = [] #use this to store which warehouses can fulfil orders
+        self.open_orders = orders
+        self.closed_orders = []
+        self.requested_items = [] #use this to store the items that are being requested. This is used to calculate which warehouses are useful/can fulfil open_orders
+        self.useful_warehouses = [] #use this to store which warehouses can fulfil open_orders
 
 
     def generate_requests(self):
@@ -48,16 +99,16 @@ class Map:
         for i in range(int(self.num_products)):
             self.requested_items.append(0)
 
-        for i in range(len(self.orders)):
-            for j in range(len(self.orders[i].items)):
-                index = int(self.orders[i].items[j])
+        for i in range(len(self.open_orders)):
+            for j in range(len(self.open_orders[i].items)):
+                index = int(self.open_orders[i].items[j])
                 self.requested_items[index] += 1
 
 
     def find_useful_wh(self):
         """
-        Finds the warehouses that can fulfil orders.
-        One Q: How should we update this list when orders are filled?
+        Finds the warehouses that can fulfil open_orders.
+        One Q: How should we update this list when open_orders are filled?
         """
 
         for i in range(len(self.warehouses)):
@@ -128,8 +179,7 @@ def initialise(file):
                 wh_products.append(input_data[i + 4].split(" "))
 
         # get order info
-        placemarker = int(
-            num_warehouses) * 2 + 4  # storing this linenumber to make it easier to tell where warehouse list ends
+        placemarker = int(num_warehouses) * 2 + 4  # storing this index to make it easier to tell where warehouse list ends
 
         num_orders = input_data[placemarker]  # don't even ask...
         delivery_coords = []
@@ -182,10 +232,25 @@ def main(file):
     map.generate_requests()
     map.find_useful_wh()
 
-    print(map.find_closest(map.drones[0], map.useful_warehouses))
-    print(len(map.useful_warehouses))
+    turn = 0
+    while (turn < map.deadline) and (len(map.open_orders) > 0):
+        print("Orders left:", len(map.open_orders))
+        print()
 
-main("busy_day.txt")
+        for drone in map.drones:
+            if drone.available and (len(map.open_orders) > 0):
+                closest_wh = map.find_closest(drone, map.useful_warehouses)
+                closest_order = map.find_closest(closest_wh, map.open_orders)
+                drone.take_order(closest_order, map)
+                print("Drone", map.drones.index(drone), "delivering items", drone.inventory, "to", drone.current_order.location)
+                print()
+                drone.deliver()
+
+        turn += 1
+
+    print("Finished!")
+
+main("input.txt")
 
 
 
