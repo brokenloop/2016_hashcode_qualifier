@@ -1,6 +1,5 @@
 import math
 
-
 class Drone:
 
     def __init__(self, location, max_load):
@@ -11,8 +10,9 @@ class Drone:
         self.current_order = None
         self.remaining_distance = 0
         self.available = True
+        self.has_final = False
 
-    def take_order(self, order, distance, map, turn):
+    def take_order(self, order, distance, map):
         """
         Takes the order that the drone has been given.
         """
@@ -40,10 +40,10 @@ class Drone:
             self.current_order.fulfilled = True
             map.open_orders.remove(self.current_order)
             map.closed_orders.append(self.current_order)
-            map.delivery_times.append(turn)
+            self.has_final = True
 
 
-    def deliver(self):
+    def deliver(self, map):
         """
         Delivers the order. --Needs testing!! Added before turn counter, so has not been tested.
         """
@@ -52,13 +52,16 @@ class Drone:
             self.current_order.items_delivered.append(item)
             self.current_order.items_in_transit.remove(item)
 
+        if self.has_final == True:
+            map.delivery_times.append(map.turn)
+
         self.location = self.current_order.location
 
         self.inventory = []
         self.load = 0
         self.current_order = None
         self.available = True
-
+        self.has_final = False
 
 
 class Warehouse:
@@ -85,6 +88,7 @@ class Map:
         self.rows = int(rows)
         self.columns = int(columns)
         self.deadline = int(deadline)
+        self.turn = 0
         self.num_products = int(num_products)
         self.product_weights = product_weights
         self.drones = drones
@@ -122,7 +126,6 @@ class Map:
                     break
 
 
-
     def find_closest(self, object, candidates):
         """
         finds the closest neighbour to "object" from a list of candidate objects (candidates).
@@ -148,8 +151,7 @@ class Map:
         return closest, shortest_distance
 
 
-
-    def move_drones(self, turn):
+    def move_drones(self):
         """
         Moves the drones. To be called every turn from the main method.
         """
@@ -158,7 +160,7 @@ class Map:
                 if drone.remaining_distance > 0:
                     drone.remaining_distance -= 1
                 else:
-                    drone.deliver()
+                    drone.deliver(self)
 
 
     def calculate_score(self):
@@ -171,7 +173,6 @@ class Map:
             scores.append(score)
 
         return sum(scores)
-
 
 
 def initialise(file):
@@ -227,7 +228,6 @@ def initialise(file):
             elif i % 3 == 2:
                 order_contents.append(input_data[i + placemarker].split(" "))
 
-
         #create objects
         drones = []
         warehouses = []
@@ -243,13 +243,7 @@ def initialise(file):
             orders.append(Order(delivery_coords[i], num_contents, order_contents[i]))
 
         map = Map(rows, columns, deadline, num_products, product_weights, drones, warehouses, orders)
-
         return map
-
-    #return(rows, columns, num_drones, deadline, max_load, num_products, product_weights, num_warehouses, wh_coords,
-    #       wh_products, num_orders, delivery_coords, num_contents, order_contents)
-
-
 
 
 def main(file):
@@ -261,9 +255,8 @@ def main(file):
     map.generate_requests()
     map.find_useful_wh()
 
-    turn = 0
-    while (turn < map.deadline) and (len(map.open_orders) > 0):
-        print("Turn", turn + 1)
+    while (map.turn < map.deadline) and (len(map.open_orders) > 0):
+        print("Turn", map.turn)
         print("Orders left:", len(map.open_orders))
         print()
 
@@ -272,18 +265,18 @@ def main(file):
                 closest_wh, distance1 = map.find_closest(drone, map.useful_warehouses)
                 closest_order, distance2 = map.find_closest(closest_wh, map.open_orders)
                 tot_distance = math.ceil(distance1 + distance2) + 2 # +2 because it takes one turn each to load the drone and deliver the items
-                drone.take_order(closest_order, tot_distance, map, turn)
+                drone.take_order(closest_order, tot_distance, map)
                 print("Drone", map.drones.index(drone), "delivering items", drone.inventory, "to", drone.current_order.location)
                 print("Distance to delivery:", drone.remaining_distance)
 
-        map.move_drones(turn)
-        turn += 1
+        map.move_drones()
+        map.turn += 1
         print()
 
     print("Finished!")
     print("Score for this dataset:", map.calculate_score())
+    print()
     return(map.calculate_score())
-
 
 
 if __name__=="__main__":
