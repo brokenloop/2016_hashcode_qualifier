@@ -12,7 +12,7 @@ class Drone:
         self.remaining_distance = 0
         self.available = True
 
-    def take_order(self, order, distance, map):
+    def take_order(self, order, distance, map, turn):
         """
         Takes the order that the drone has been given.
         """
@@ -40,6 +40,7 @@ class Drone:
             self.current_order.fulfilled = True
             map.open_orders.remove(self.current_order)
             map.closed_orders.append(self.current_order)
+            map.delivery_times.append(turn)
 
 
     def deliver(self):
@@ -92,6 +93,7 @@ class Map:
         self.closed_orders = []
         self.requested_items = [] #use this to store the items that are being requested. This is used to calculate which warehouses are useful/can fulfil open_orders
         self.useful_warehouses = [] #use this to store which warehouses can fulfil open_orders
+        self.delivery_times = []
 
 
     def generate_requests(self):
@@ -147,7 +149,7 @@ class Map:
 
 
 
-    def move_drones(self):
+    def move_drones(self, turn):
         """
         Moves the drones. To be called every turn from the main method.
         """
@@ -157,6 +159,19 @@ class Map:
                     drone.remaining_distance -= 1
                 else:
                     drone.deliver()
+
+
+    def calculate_score(self):
+        """
+        Calculates score based on the list of delivery times entered.
+        """
+        scores = []
+        for time in self.delivery_times:
+            score = math.ceil(((self.deadline - time)/self.deadline) * 100)
+            scores.append(score)
+
+        return sum(scores)
+
 
 
 def initialise(file):
@@ -236,13 +251,13 @@ def initialise(file):
 
 
 
+
 def main(file):
     """
     Main method for the program.
     """
 
     map = initialise(file)
-
     map.generate_requests()
     map.find_useful_wh()
 
@@ -256,22 +271,32 @@ def main(file):
             if drone.available and (len(map.open_orders) > 0):
                 closest_wh, distance1 = map.find_closest(drone, map.useful_warehouses)
                 closest_order, distance2 = map.find_closest(closest_wh, map.open_orders)
-                tot_distance = int(math.ceil(distance1 + distance2))
-                drone.take_order(closest_order, tot_distance, map)
+                tot_distance = math.ceil(distance1 + distance2) + 2 # +2 because it takes one turn each to load the drone and deliver the items
+                drone.take_order(closest_order, tot_distance, map, turn)
                 print("Drone", map.drones.index(drone), "delivering items", drone.inventory, "to", drone.current_order.location)
                 print("Distance to delivery:", drone.remaining_distance)
 
-        map.move_drones()
+        map.move_drones(turn)
         turn += 1
         print()
 
     print("Finished!")
+    print("Score for this dataset:", map.calculate_score())
+    return(map.calculate_score())
+
 
 
 if __name__=="__main__":
-    main("busy_day.txt")
+    print("Running first dataset...\n")
+    score1 = main("mother_of_all_warehouses.txt")
 
+    print("Running second dataset...\n")
+    score2 = main("busy_day.txt")
 
+    print("Running third dataset...\n")
+    score3 = main("redundancy.txt")
+
+    print("Final score:", score1 + score2 + score3)
 
 
 
