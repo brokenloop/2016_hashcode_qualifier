@@ -12,7 +12,7 @@ class Drone:
         self.available = True
         self.has_final = False
 
-    def take_order(self, order, distance, map):
+    def take_order(self, warehouse, order, distance, world):
         """
         Takes the order that the drone has been given.
         """
@@ -23,40 +23,42 @@ class Drone:
 
         #calculates which items it can take, adds them to the inventory, then marks them as "in transit"
         for item in self.current_order.items:
-            weight = int(map.product_weights[int(item)])
-            if self.load + weight < self.max_load:
+            weight = int(world.product_weights[int(item)])
+            if (self.load + weight < self.max_load) and (warehouse.inventory[int(item)] > 0):
                 self.inventory.append(item)
                 self.load += weight
-
                 self.current_order.items_in_transit.append(item)
                 self.current_order.items.remove(item)
+                world.requested_items[int(item)] -= 1
 
-        #removes these items from the "requested_items"
-        for item in self.inventory:
-            map.requested_items[int(item)] -= 1
+        #removes items in the order from the warehouse's inventory
+        warehouse.update_inv(self.inventory)
+
 
         #checks whether order has been fulfilled by this drone, removes order from open orders if it has.
         if self.current_order.items == []:
             self.current_order.fulfilled = True
-            map.open_orders.remove(self.current_order)
-            map.closed_orders.append(self.current_order)
+            world.open_orders.remove(self.current_order)
             self.has_final = True
 
 
-    def deliver(self, map):
+    def deliver(self, world):
         """
-        Delivers the order. --Needs testing!! Added before turn counter, so has not been tested.
+        Delivers the order. Resets the drone's variables, and marks the drone as available.
         """
 
+        #marks items as delivered, removes them from items_in_transit
         for item in self.inventory:
             self.current_order.items_delivered.append(item)
             self.current_order.items_in_transit.remove(item)
 
+        #if drone was carrying the final delivery for the order, mark the order as closed. Also record the time that this order took.
         if self.has_final == True:
-            map.delivery_times.append(map.turn)
+            world.closed_orders.append(self.current_order)
+            world.delivery_times.append(world.turn)
 
+        #reset object variables, move the drone to the location of the order, and mark it as available.
         self.location = self.current_order.location
-
         self.inventory = []
         self.load = 0
         self.current_order = None
@@ -69,10 +71,24 @@ class Warehouse:
     def __init__(self, location, inventory):
         self.location = location
         self.inventory = inventory
+        self.int_inv()
 
+
+    def int_inv(self):
+        """
+        Changes inventory from str to int - hacky solution to an annoying bug.
+        """
+        for i in range(len(self.inventory)):
+            self.inventory[i] = int(self.inventory[i])
+
+    def update_inv(self, items):
+        """
+        Removes items from inventory. To be used when a drone accepts an order.
+        """
+        for item in items:
+            self.inventory[int(item)] -= 1
 
 class Order:
-    
     def __init__(self, location, num_items, items):
         self.location = location
         self.num_items = num_items
@@ -82,7 +98,7 @@ class Order:
         self.fulfilled = False
 
 
-class Map:
+class World:
 
     def __init__(self, rows, columns, deadline, num_products, product_weights, drones, warehouses, orders):
         self.rows = int(rows)
@@ -98,15 +114,20 @@ class Map:
         self.requested_items = [] #use this to store the items that are being requested. This is used to calculate which warehouses are useful/can fulfil open_orders
         self.useful_warehouses = [] #use this to store which warehouses can fulfil open_orders
         self.delivery_times = []
+        self.generate_requests()
+        self.find_useful_wh()
 
 
     def generate_requests(self):
         """
-        generates the list of requested items
+        generates a list of items requested by orders.
         """
+
+        #initialise a list with a "0" for every entry.
         for i in range(int(self.num_products)):
             self.requested_items.append(0)
 
+        #Update this list to reflect how many of each item is needed by all of the orders.
         for i in range(len(self.open_orders)):
             for j in range(len(self.open_orders[i].items)):
                 index = int(self.open_orders[i].items[j])
@@ -116,19 +137,34 @@ class Map:
     def find_useful_wh(self):
         """
         Finds the warehouses that can fulfil open_orders.
-        One Q: How should we update this list when open_orders are filled?
         """
 
-        for i in range(len(self.warehouses)):
-            for j in range(len(self.warehouses[i].inventory)):
-                if (int(self.warehouses[i].inventory[j]) > 0) and (self.requested_items[j] > 0):
-                    self.useful_warehouses.append(self.warehouses[i])
+        self.useful_warehouses = []
+
+        #searches self.requested_items for items that the warehouse has.
+        for warehouse in self.warehouses:
+            for i in range(len(self.requested_items)):
+                if (warehouse.inventory[i] > 0) and (self.requested_items[i] > 0):
+                    self.useful_warehouses.append(warehouse)
                     break
+
+
+    def find_orders_from_wh(self, warehouse):
+        """
+        Finds list of orders that can be satisfied by a specific warehouse
+        """
+        wh_orders = []
+
+        for order in self.open_orders:
+            for item in order.items:
+                if warehouse.inventory[int(item)] > 0:
+                    wh_orders.append(order)
+        return wh_orders
 
 
     def find_closest(self, object, candidates):
         """
-        finds the closest neighbour to "object" from a list of candidate objects (candidates).
+        finds the closest neighbour to "object" from a list of candidate objects "candidates".
         """
         x1 = int(object.location[0])
         y1 = int(object.location[1])
@@ -208,6 +244,7 @@ def initialise(file):
             elif i % 2 == 1:
                 wh_products.append(input_data[i + 4].split(" "))
 
+
         # get order info
         placemarker = int(num_warehouses) * 2 + 4  # storing this index to make it easier to tell where warehouse list ends
 
@@ -242,8 +279,8 @@ def initialise(file):
         for i in range(int(num_orders)):
             orders.append(Order(delivery_coords[i], num_contents, order_contents[i]))
 
-        map = Map(rows, columns, deadline, num_products, product_weights, drones, warehouses, orders)
-        return map
+        world = World(rows, columns, deadline, num_products, product_weights, drones, warehouses, orders)
+        return world
 
 
 def main(file):
@@ -251,46 +288,44 @@ def main(file):
     Main method for the program.
     """
 
-    map = initialise(file)
-    map.generate_requests()
-    map.find_useful_wh()
+    world = initialise(file)
 
-    while (map.turn < map.deadline) and (len(map.open_orders) > 0):
-        print("Turn", map.turn)
-        print("Orders left:", len(map.open_orders))
+    while (world.turn < world.deadline) and (len(world.open_orders) > 0):
+
+        print("Turn", world.turn)
+        print("Orders left:", len(world.open_orders))
+        print("Warehouses left:", len(world.useful_warehouses))
         print()
 
-        for drone in map.drones:
-            if drone.available and (len(map.open_orders) > 0):
-                closest_wh, distance1 = map.find_closest(drone, map.useful_warehouses)
-                closest_order, distance2 = map.find_closest(closest_wh, map.open_orders)
+        # this section checks whether a drone is available, and that there are still orders to be filled
+        # then it recalculates the list of useful warehouses
+        # after that, it finds the closest warehouse to the drone's current location
+        # it then calculates which orders can be fulfilled by that warehouse, and which order is closest
+        # then it assigns that order to the drone, and the drone marks itself as unavailable until the order has been completed
+        for drone in world.drones:
+            if drone.available and (len(world.open_orders) > 0):
+                world.find_useful_wh()
+                closest_wh, distance1 = world.find_closest(drone, world.useful_warehouses)
+                wh_orders = world.find_orders_from_wh(closest_wh)
+                closest_order, distance2 = world.find_closest(closest_wh, wh_orders)
                 tot_distance = math.ceil(distance1 + distance2) + 2 # +2 because it takes one turn each to load the drone and deliver the items
-                drone.take_order(closest_order, tot_distance, map)
-                print("Drone", map.drones.index(drone), "delivering items", drone.inventory, "to", drone.current_order.location)
+                drone.take_order(closest_wh, closest_order, tot_distance, world)
+                print("Drone", world.drones.index(drone), "delivering items", drone.inventory, "to", drone.current_order.location)
                 print("Distance to delivery:", drone.remaining_distance)
 
-        map.move_drones()
-        map.turn += 1
+        world.move_drones()
+        world.turn += 1
         print()
 
     print("Finished!")
-    print("Score for this dataset:", map.calculate_score())
+    print("Score for this dataset:", world.calculate_score())
     print()
-    return(map.calculate_score())
+    return(world.calculate_score())
 
 
 if __name__=="__main__":
-    print("Running first dataset...\n")
-    score1 = main("mother_of_all_warehouses.txt")
 
-    print("Running second dataset...\n")
-    score2 = main("busy_day.txt")
-
-    print("Running third dataset...\n")
-    score3 = main("redundancy.txt")
-
-    print("Final score:", score1 + score2 + score3)
-
+    main("busy_day.txt")
 
 
 
